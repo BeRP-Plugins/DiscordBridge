@@ -29,6 +29,10 @@ class DiscordBridge extends EventEmitter {
       this.api.getLogger().info("Loaded!")
     }
     public async onEnabled(): Promise<void> {
+      this.api.createInterface({
+        name: "DiscordBridge",
+        interface: fs.readFileSync(path.resolve(this.api.path + '/src' + '/@interface' + '/DiscordBridge.i.ts'), "utf-8"),
+      })
       this.api.getLogger().info('Enabled!')
       this.main = await (await this.api.getPluginByInstanceId(this.api.getConfig().name, 1)).plugin as unknown as DiscordBridge
       this.commandManager.onEnabled()
