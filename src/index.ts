@@ -61,7 +61,7 @@ class DiscordBridge extends EventEmitter {
     }
     public sendEmbed(embed: MessageEmbed): void {
       this.client.channels.fetch(this.config.channelId).then((channel: TextChannel) => {
-        channel.send(embed)
+        channel.send({embed})
       })
     }
     private createBot(): void {
