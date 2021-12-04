@@ -70,7 +70,7 @@ class DiscordBridge extends EventEmitter {
         this.api.getLogger().success(`${this.client.user.tag} is online!`)
       })
       this.client.on("message", (data) => {
-        if (data.channel.id != this.config.channelId || data.author.bot || !this.handleMessages) return
+        if (data.channel.id != this.config.channelId || data.author.bot || !this.handleMessages || data.content.startsWith(this.getCommandManager().prefix)) return
         for (const [, c] of this.api.getConnection().getConnectionManager()
           .getConnections()) {
           const pl = c.getPlugins().get(this.api.getConfig().name)
