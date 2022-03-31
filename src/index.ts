@@ -10,15 +10,7 @@ import { SlashCommandBuilder } from "@discordjs/builders";
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v9';
 
-const { token, channelId, clientId, guildId } = require("../config.json");
-
-const {
-  realmName,
-  realmId,
-  accountEmail,
-  verboseMessageEvents,
-  attemptAutoConnect,
-} = require("../moreconfig.json");
+const { token, channelId, clientId, guildId, AutoConnect, realmName, logMessageEvents } = require("../config.json");
 
 function getSavedPic(eventXuid){
     const tempPicMap = {
@@ -48,15 +40,15 @@ class DiscBot {
 	
     async onLoaded(): Promise<void> {
         this.api.getLogger().info("Discord-MC Bridge loaded!");
-        if(!attemptAutoConnect) return
+        if(!AutoConnect.attempt) return
 	    this.api.getLogger().info("Attempting auto-connection with realm...");
 	    try {
-	        this.api.autoConnect(accountEmail, realmId)
+	        this.api.autoConnect(AutoConnect.email, AutoConnect.realmId)
         }
 	    catch(error) {
 	        this.api.getLogger().error("AutoConnect failed... Attempting reconnect", error)
 			try {
-			    this.api.autoReconnect(accountEmail, realmId)
+			    this.api.autoReconnect(AutoConnect.email, AutoConnect.realmId)
 			}
 			catch(anotherError) {
 			    this.api.getLogger().error("AutoReconnect failed. Skipping...", anotherError)
@@ -120,7 +112,7 @@ class DiscBot {
             if (message.author.bot)
                 return;
             if (message.channel.id == channelId) {
-			    if (verboseMessageEvents) {
+			    if (logMessageEvents) {
 				    this.api.getLogger().success("Received new message event from the Discord client:");
 				    this.api.getLogger().success(`   "${message.content}"`);
 				}
@@ -130,7 +122,7 @@ class DiscBot {
             }
         });
         this.api.getEventManager().on("PlayerMessage", async (packet) => {
-		    if (verboseMessageEvents) {
+		    if (logMessageEvents) {
 				this.api.getLogger().success("Received new message event from the Realms client:");
 				this.api.getLogger().success(`   "${packet.message}"`);
 			}
@@ -189,7 +181,7 @@ class DiscBot {
                 const realmName = this.api.getConnection().realm.name;
                 let response = `/10 Players Online**:`;
                 let players = [];
-                response += `\n*-*`;
+                response += `\n*-* ${this.api.getConnection().getXboxProfile().extraData.displayName}`;
                 for (const [, p] of this.api.getPlayerManager().getPlayerList()) {
                     players.push(p.getName());
                     response += `\n*-* ${p.getName()}`;

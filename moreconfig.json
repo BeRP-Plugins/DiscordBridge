@@ -1,7 +1,0 @@
-{
-	"realmName": "YourRealmName", // string
-	"realmId": 0000000000, // number
-	"accountEmail":"botaccount@probablygonnagetbannedeventually.com", // string
-	"verboseMessageEvents":true, // boolean
-	"attemptAutoConnect":true // boolean
-}

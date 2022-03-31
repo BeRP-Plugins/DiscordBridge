@@ -2,5 +2,12 @@
 	"clientId": "00000000000000000",
 	"guildId": "0000000000000000",
 	"channelId": "000000000000000000",
-	"token": "eXaMpLe.tOkEn-7yn9baK3bhmu0zmEpShg-2JjRNPAJJF8SUxh78Ik.gxHe"
+	"token": "eXaMpLe.tOkEn-7yn9baK3bhmu0zmEpShg-2JjRNPAJJF8SUxh78Ik.gxHe",
+	"realmName": "MCBE Utilities (Set this to your needs)",
+	"logMessageEvents":true,
+	"AutoConnect": {
+		"attempt": true,
+		"email": "",
+		"realmId": 0
+	}
 }
