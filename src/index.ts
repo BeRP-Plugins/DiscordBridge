@@ -5,7 +5,6 @@ import {
   MessageEmbed,
   TextChannel,
   Interaction,
-  CacheType
 } from "discord.js";
 import { SlashCommandBuilder } from "@discordjs/builders";
 
