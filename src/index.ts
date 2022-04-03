@@ -66,17 +66,10 @@ class DiscBot {
             client.user.setActivity(`over ${realmName}`, { type: "WATCHING" })
 	    this.api.getLogger().info("Discord-MC Bridge Activity set.");
             this.api.getLogger().info(`Now bridged with Discord as ${client.user.username}`);
-            const fancyStartMSG = new MessageEmbed()
+            const StartEmbed = new MessageEmbed()
                 .setColor("#139dbf")
                 .setDescription(`**${realmName}'s chat has been bridged with discord**`)
-            client.channels
-                .fetch(channelId)
-                .then(async (channel) => await (channel as TextChannel).send({ embeds: [fancyStartMSG] }).catch((error) => {
-                this.api.getLogger().error(error);
-            }))
-                .catch((error) => {
-                this.api.getLogger().error(error);
-            });
+            this.sendEmbed([StartEmbed])
             
             this.api
                 .getCommandManager()
@@ -126,52 +119,31 @@ class DiscBot {
 				this.api.getLogger().success("Received new message event from the Realms client:");
 				this.api.getLogger().success(`   "${packet.message}"`);
 			}
-            await client.channels
-                .fetch(channelId)
-                .then((channel) => (channel as TextChannel)
-					.send(`[${packet.sender
-						.getConnection()
-						.realm.name.replace(/§[0-9A-FK-OR]/gi, "")
-						.replace("§g", "")}] ${packet.sender.getName()}: ${packet.message}§r`))
-                .catch((error) => {
-					this.api.getLogger().error(error);
-				});
+            this.sendMessage(`[${packet.sender
+                .getConnection()
+                .realm.name.replace(/§[0-9A-FK-OR]/gi, "")
+                .replace("§g", "")}] ${packet.sender.getName()}: ${packet.message}§r`)
         });
         this.api.getEventManager().on("PlayerInitialized", (userJoin) => {
 			let eventXuid = userJoin.getXuid()
-            const fancyLeaveMSG = new MessageEmbed()
+            const Join = new MessageEmbed()
                 .setColor("#00ff00")
 				.setTitle("__Player connected!__")
                 .setDescription(`**${userJoin.getName()}** has joined the realm\nXUID: [${eventXuid}]\nDevice: ${userJoin.getDevice()}`)
 				.setImage(getSavedPic(eventXuid));
-            return client.channels
-                .fetch(channelId)
-                .then(async (channel) => await (channel as TextChannel).send({ embeds: [fancyLeaveMSG] }))
-                .catch((error) => {
-                this.api.getLogger().error(error);
-            });
+            return this.sendEmbed([Join]);
         });
 /**		this.api.getEventManager().on("PlayerDied", (userDied) => {
-            const fancyDiedMSG = new MessageEmbed()
+            const Death = new MessageEmbed()
                 .setColor("#ff0000")
                 .setDescription(`Oof! **${userDied.player}** was just killed by ${userDied.killer}. RIP!`);
-            return client.channels
-                .fetch(channelId)
-                .then(async (channel) => await channel.send({ embeds: [fancyDiedMSG] }))
-                .catch((error) => {
-					this.api.getLogger().error(error);
-            });
+            return this.sendEmbed([Death])
         });**/
         this.api.getEventManager().on("PlayerLeft", async (userLeave) => {
-            const fancyLeaveMSG = new MessageEmbed()
+            const Leave = new MessageEmbed()
                 .setColor("#9d3838")
                 .setDescription(`**${userLeave.getName()}** has left the realm.`);
-            return client.channels
-                .fetch(channelId)
-                .then(async (channel) => await (channel as TextChannel).send({ embeds: [fancyLeaveMSG] }))
-                .catch((error) => {
-					this.api.getLogger().error(error);
-            });
+            return this.sendEmbed([Leave]);
         });
         client.on("interactionCreate", async (interaction) => {
             if (!interaction.isCommand())
@@ -198,18 +170,31 @@ class DiscBot {
             }
         });
     }
-    onDisabled() {
-        let client = this.client
+    public onDisabled() {
         const fancyStopMSG = new MessageEmbed()
             .setColor("#139dbf")
             .setDescription(":octagonal_sign: ***Discord-MC Bridge has been disconnected.***");
-        client.channels
-            .fetch(channelId)
-            .then(async (channel) => await (channel as TextChannel).send({ embeds: [fancyStopMSG] }).catch((error) => {
-            this.api.getLogger().error(error);
-        })).catch((error) => {
+        this.sendEmbed([fancyStopMSG])
+    }
+
+    public sendMessage(message: string): void {
+        this.client.channels
+        .fetch(channelId)
+        .then((channel) => (channel as TextChannel)
+            .send(message))
+        .catch((error) => {
             this.api.getLogger().error(error);
         });
+    }
+
+    public sendEmbed(embed: MessageEmbed[]): void {
+        this.client.channels
+        .fetch(channelId)
+        .then(async (channel) => await (channel as TextChannel).send({ embeds: embed }).catch((error) => {
+        this.api.getLogger().error(error);
+    })).catch((error) => {
+        this.api.getLogger().error(error);
+    });
     }
 }
 
