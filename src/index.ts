@@ -4,6 +4,8 @@ import {
   Intents,
   MessageEmbed,
   TextChannel,
+  Interaction,
+  CacheType
 } from "discord.js";
 import { SlashCommandBuilder } from "@discordjs/builders";
 
@@ -26,6 +28,8 @@ function getSavedPic(eventXuid){
 
 class DiscBot {
     private api: PluginApi
+    private commandMap: Map<string, CallableFunction>
+    private commandArray: SlashCommandBuilder[]
     private client: Client
     constructor(api: PluginApi) {
         this.api = api;
@@ -36,6 +40,8 @@ class DiscBot {
           Intents.FLAGS.GUILD_MEMBERS,
           ],
         });
+        this.commandArray = [];
+        this.commandMap = new Map();
         }
 	
     async onLoaded(): Promise<void> {
@@ -74,32 +80,26 @@ class DiscBot {
             this.api
                 .getCommandManager()
                 .executeCommand(`tellraw @a {\"rawtext\":[{\"text\":\"§a§l§oDiscord-MC Bridge has been connected.§r\"}]}`);
-            const guild = await client.guilds.fetch(guildId);
-            const cmds = await guild.commands.fetch();
-            let arr = [];
-            cmds.forEach((cmd) => {
-                arr.push(cmd.name);
-            });
-            const commands = [
-                new SlashCommandBuilder()
-                    .setName("list")
-                    .setDescription("Gets a list of people currently on the realm."),
-                ].map((command) => command.toJSON());
-                const rest = new REST({ version: "9" }).setToken(token);
-                async () => {
-                    try {
-                        await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
-                            body: commands,
-                        });
-                        this.api
-                            .getLogger()
-                            .success("Successfully registered the list command.");
+                this.registerCommand(new DiscordCommand('list', 'Gets a list of people currently on the realm.', async (interaction) => {
+                    if (!interaction.isCommand()) return;
+                    const realmName = this.api.getConnection().realm.name;
+                    let response = `/10 Players Online**:`;
+                    let players = [];
+                    response += `\n*-* ${this.api.getConnection().getXboxProfile().extraData.displayName}`;
+                    for (const [, p] of this.api.getPlayerManager().getPlayerList()) {
+                        players.push(p.getName());
+                        response += `\n*-* ${p.getName()}`;
                     }
-                    catch (error) {
-                        this.api.getLogger().error("Error occurred while attempting to register list command", error);
-                    }
-                };
-            
+                    const fancyResponse = new MessageEmbed()
+                        .setColor("#5a0cc0")
+                        .setTitle(`${realmName}`)
+                        .setDescription(`**${players.length + 1}${response}`);
+                    await interaction
+                        .reply({ embeds: [fancyResponse] })
+                        .catch((error) => {
+                            this.api.getLogger().error(error);
+                    });
+                }))
         });
         client.on("messageCreate", (message) => {
             if (message.author.bot)
@@ -122,7 +122,7 @@ class DiscBot {
             this.sendMessage(`[${packet.sender
                 .getConnection()
                 .realm.name.replace(/§[0-9A-FK-OR]/gi, "")
-                .replace("§g", "")}] ${packet.sender.getName()}: ${packet.message}§r`)
+                .replace("§g", "")}] ${packet.sender.getName()}: ${packet.message}`)//§r
         });
         this.api.getEventManager().on("PlayerInitialized", (userJoin) => {
 			let eventXuid = userJoin.getXuid()
@@ -149,25 +149,13 @@ class DiscBot {
             if (!interaction.isCommand())
                 return;
             const { commandName } = interaction;
-            if (commandName === "list") {
-                const realmName = this.api.getConnection().realm.name;
-                let response = `/10 Players Online**:`;
-                let players = [];
-                response += `\n*-* ${this.api.getConnection().getXboxProfile().extraData.displayName}`;
-                for (const [, p] of this.api.getPlayerManager().getPlayerList()) {
-                    players.push(p.getName());
-                    response += `\n*-* ${p.getName()}`;
-                }
-                const fancyResponse = new MessageEmbed()
-                    .setColor("#5a0cc0")
-                    .setTitle(`${realmName}`)
-                    .setDescription(`**${players.length + 1}${response}`);
-                await interaction
-                    .reply({ embeds: [fancyResponse] })
-                    .catch((error) => {
-						this.api.getLogger().error(error);
-                });
+/*             if (commandName === "list") {
+
             }
+            else { */
+                if(!this.commandMap.has(commandName)) return;
+                this.commandMap.get(commandName)(interaction)
+            //}
         });
     }
     public onDisabled() {
@@ -191,11 +179,51 @@ class DiscBot {
         this.client.channels
         .fetch(channelId)
         .then(async (channel) => await (channel as TextChannel).send({ embeds: embed }).catch((error) => {
-        this.api.getLogger().error(error);
-    })).catch((error) => {
-        this.api.getLogger().error(error);
+            this.api.getLogger().error(error);
+        })).catch((error) => {
+            this.api.getLogger().error(error);
     });
+    }
+
+    public registerCommand(command: DiscordCommand): void {
+        if(this.commandMap.has(command.name)) return this.api.getLogger().error(`${command.name} has already been registered!`)
+        this.commandArray.push(
+            new SlashCommandBuilder()
+        .setName(command.name)
+        .setDescription(command.description)
+        );
+        const commands = this.commandArray.map((command) => command.toJSON());
+            const rest = new REST({ version: "9" }).setToken(token);
+            (async () => {
+                try {
+                    await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
+                        body: commands,
+                    });
+                    this.api
+                        .getLogger()
+                        .success(`Successfully registered "${command.name}".`);
+                    this.commandMap.set(command.name, command.response);
+                }
+                catch (error) {
+                    this.api.getLogger().error("Error occurred while attempting to register list command", error);
+                }
+            })();
+    }
+    
+    public getClient(): Client {
+        return this.client;
     }
 }
 
 export = DiscBot;
+
+class DiscordCommand {
+    name: string;
+    description: string;
+    response: CallableFunction;
+    constructor(name: string, description: string, response: (interaction: Interaction) => void) {
+        this.name = name;
+        this.description = description;
+        this.response = response;
+    }
+}
