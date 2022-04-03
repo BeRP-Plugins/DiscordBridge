@@ -80,7 +80,7 @@ class DiscBot {
             
             this.api
                 .getCommandManager()
-                .executeCommand(`tellraw @a {\"rawtext\":[{\"text\":\"§a§l§oDiscord-MC Bridge has been connected.\"}]}`);
+                .executeCommand(`tellraw @a {\"rawtext\":[{\"text\":\"§a§l§oDiscord-MC Bridge has been connected.§r\"}]}`);
             const guild = await client.guilds.fetch(guildId);
             const cmds = await guild.commands.fetch();
             let arr = [];
@@ -118,7 +118,7 @@ class DiscBot {
 				}
                 this.api
                     .getCommandManager()
-                    .executeCommand(`tellraw @a {\"rawtext\":[{\"text\":\"§8[§9Discord§8]§f §7${message.author.username}§f: ${message.content}\"}]}`);
+                    .executeCommand(`tellraw @a {\"rawtext\":[{\"text\":\"§8[§9Discord§8]§f §7${message.author.username}§f: ${message.content}§r\"}]}`);
             }
         });
         this.api.getEventManager().on("PlayerMessage", async (packet) => {
@@ -132,7 +132,7 @@ class DiscBot {
 					.send(`[${packet.sender
 						.getConnection()
 						.realm.name.replace(/§[0-9A-FK-OR]/gi, "")
-						.replace("§g", "")}] ${packet.sender.getName()}: ${packet.message}`))
+						.replace("§g", "")}] ${packet.sender.getName()}: ${packet.message}§r`))
                 .catch((error) => {
 					this.api.getLogger().error(error);
 				});
