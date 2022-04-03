@@ -149,13 +149,8 @@ class DiscBot {
             if (!interaction.isCommand())
                 return;
             const { commandName } = interaction;
-/*             if (commandName === "list") {
-
-            }
-            else { */
                 if(!this.commandMap.has(commandName)) return;
                 this.commandMap.get(commandName)(interaction)
-            //}
         });
     }
     public onDisabled() {
@@ -205,11 +200,11 @@ class DiscBot {
                     this.commandMap.set(command.name, command.response);
                 }
                 catch (error) {
-                    this.api.getLogger().error("Error occurred while attempting to register list command", error);
+                    this.api.getLogger().error(`Error occurred while attempting to register "${command.name}" command`, error);
                 }
             })();
     }
-    
+
     public getClient(): Client {
         return this.client;
     }
