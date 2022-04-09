@@ -30,6 +30,10 @@ class DiscBot {
     private commandMap: Map<string, CallableFunction>
     private commandArray: SlashCommandBuilder[]
     private client: Client
+    private ready: boolean = false
+    private messageQueue: string[] = []
+    private embedQueue: MessageEmbed[] = []
+    private commandQueue: DiscordCommand[] = []
     constructor(api: PluginApi) {
         this.api = api;
         this.client = new Client({
@@ -67,6 +71,10 @@ class DiscBot {
         client.login(token);
 	this.api.getLogger().info("Discord-MC Bridge login complete.");
         client.on("ready", async () => {
+            this.ready = true;
+            if(this.messageQueue.length > 0) this.messageQueue.forEach((message) => this.sendMessage(message));
+            if(this.embedQueue.length > 0) this.embedQueue.forEach((embed) => this.sendEmbed([embed]));
+            if(this.commandQueue.length > 0) this.commandQueue.forEach((command) => this.registerCommand(command));
             this.api.getLogger().info("Discord-MC Bridge Client Ready, setting activity...");
             client.user.setActivity(`over ${realmName}`, { type: "WATCHING" })
 	    this.api.getLogger().info("Discord-MC Bridge Activity set.");
@@ -160,6 +168,10 @@ class DiscBot {
     }
 
     public sendMessage(message: string): void {
+        if(!this.ready) {
+            this.messageQueue.push(message)
+            return;
+        };
         this.client.channels
         .fetch(channelId)
         .then((channel) => (channel as TextChannel)
@@ -170,6 +182,10 @@ class DiscBot {
     }
 
     public sendEmbed(embed: MessageEmbed[]): void {
+        if(!this.ready) {
+            embed.forEach((e) => this.embedQueue.push(e))
+            return;
+        };
         this.client.channels
         .fetch(channelId)
         .then(async (channel) => await (channel as TextChannel).send({ embeds: embed }).catch((error) => {
@@ -180,6 +196,10 @@ class DiscBot {
     }
 
     public registerCommand(command: DiscordCommand): void {
+        if(!this.ready) {
+            this.commandQueue.push(command)
+            return;
+        };
         if(this.commandMap.has(command.name)) return this.api.getLogger().error(`${command.name} has already been registered!`)
         this.commandArray.push(
             new SlashCommandBuilder()
@@ -187,6 +207,7 @@ class DiscBot {
         .setDescription(command.description)
         );
         const commands = this.commandArray.map((command) => command.toJSON());
+        this.api.getLogger().info(`Attempting to register "${command.name}"`)
             const rest = new REST({ version: "9" }).setToken(token);
             (async () => {
                 try {
