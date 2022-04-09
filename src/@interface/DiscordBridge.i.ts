@@ -30,5 +30,5 @@ export interface Config {
 interface DiscordCommand {
   name: string;
   description: string;
-  response: CallableFunction;
+  response: (interaction: any) => void;
 }
