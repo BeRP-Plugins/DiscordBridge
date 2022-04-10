@@ -31,8 +31,8 @@ class DiscBot {
     private commandArray: SlashCommandBuilder[]
     private client: Client
     private ready: boolean = false
-    private messageQueue: string[] = []
-    private embedQueue: MessageEmbed[] = []
+    private messageQueue: { message:string, channel?:string }[] = []
+    private embedQueue: { embed: MessageEmbed[], channel?:string }[] = []
     private commandQueue: DiscordCommand[] = []
     constructor(api: PluginApi) {
         this.api = api;
@@ -72,8 +72,8 @@ class DiscBot {
 	this.api.getLogger().info("Discord-MC Bridge login complete.");
         client.on("ready", async () => {
             this.ready = true;
-            if(this.messageQueue.length > 0) this.messageQueue.forEach((message) => this.sendMessage(message));
-            if(this.embedQueue.length > 0) this.embedQueue.forEach((embed) => this.sendEmbed([embed]));
+            if(this.messageQueue.length > 0) this.messageQueue.forEach(({message, channel}) => this.sendMessage(message, channel));
+            if(this.embedQueue.length > 0) this.embedQueue.forEach(({embed, channel}) => this.sendEmbed(embed, channel));
             if(this.commandQueue.length > 0) this.commandQueue.forEach((command) => this.registerCommand(command));
             this.api.getLogger().info("Discord-MC Bridge Client Ready, setting activity...");
             client.user.setActivity(`over ${realmName}`, { type: "WATCHING" })
@@ -87,7 +87,7 @@ class DiscBot {
             this.api
                 .getCommandManager()
                 .executeCommand(`tellraw @a {\"rawtext\":[{\"text\":\"§a§l§oDiscord-MC Bridge has been connected.§r\"}]}`);
-                this.registerCommand(new DiscordCommand('list', 'Gets a list of people currently on the realm.', async (interaction) => {
+                this.registerCommand({name: 'list', description: 'Gets a list of people currently on the realm.', response: async (interaction) => {
                     if (!interaction.isCommand()) return;
                     const realmName = this.api.getConnection().realm.name;
                     let response = `/10 Players Online**:`;
@@ -106,7 +106,7 @@ class DiscBot {
                         .catch((error) => {
                             this.api.getLogger().error(error);
                     });
-                }))
+                }})
         });
         client.on("messageCreate", (message) => {
             if (message.author.bot)
@@ -167,13 +167,14 @@ class DiscBot {
         this.sendEmbed([fancyStopMSG])
     }
 
-    public sendMessage(message: string): void {
+    public sendMessage(message: string, channel?: string): void {
         if(!this.ready) {
-            this.messageQueue.push(message)
+            this.messageQueue.push({message, channel});
             return;
         };
+        if(!channel) channel = channelId;
         this.client.channels
-        .fetch(channelId)
+        .fetch(channel)
         .then((channel) => (channel as TextChannel)
             .send(message))
         .catch((error) => {
@@ -181,13 +182,14 @@ class DiscBot {
         });
     }
 
-    public sendEmbed(embed: MessageEmbed[]): void {
+    public sendEmbed(embed: MessageEmbed[], channel?: string): void {
         if(!this.ready) {
-            embed.forEach((e) => this.embedQueue.push(e))
+            this.embedQueue.push({embed, channel});
             return;
         };
+        if(!channel) channel = channelId;
         this.client.channels
-        .fetch(channelId)
+        .fetch(channel)
         .then(async (channel) => await (channel as TextChannel).send({ embeds: embed }).catch((error) => {
             this.api.getLogger().error(error);
         })).catch((error) => {
@@ -232,13 +234,8 @@ class DiscBot {
 
 export = DiscBot;
 
-class DiscordCommand {
+interface DiscordCommand {
     name: string;
     description: string;
-    response: CallableFunction;
-    constructor(name: string, description: string, response: (interaction: Interaction) => void) {
-        this.name = name;
-        this.description = description;
-        this.response = response;
-    }
+    response: (interaction: Interaction) => void;
 }
