@@ -7,8 +7,8 @@ export interface DiscordBridge {
   onLoaded(): Promise<void>
   onEnabled(): Promise<void>
   onDisabled(): void
-  sendMessage(message: string): void
-  sendEmbed(embed: any): void
+  sendMessage(message: string, channel?: string): void
+  sendEmbed(embed: any, channel?: string): void
   getClient(): any
   registerCommand(command: DiscordCommand): void
 }
