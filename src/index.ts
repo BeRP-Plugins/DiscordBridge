@@ -227,6 +227,7 @@ class DiscBot {
             })();
     }
 
+
     public getClient(): Client {
         return this.client;
     }
