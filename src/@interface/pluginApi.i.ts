@@ -26,6 +26,7 @@ export interface PluginApi {
   getPlayerManager(): PlayerManager
   getEntityManager(): EntityManager
   getWorldManager(): WorldManager
+  getRealmManager(): RealmManager
   getSocketManager(): SocketManager
   getPlugins(): Map<string, ActivePlugin>
   getPluginByInstanceId(name: string, id: number): Promise<ActivePlugin>
@@ -198,6 +199,7 @@ type LoggerColors = (
 )
 
 export interface CommandManager {
+  enabled: boolean
   executeCommand(command: string, callback?: (res: packet_command_output) => void): void
   registerConsoleCommand(options: ConsoleCommandOptions, callback: (args: string[]) => void): void
   registerCommand(options: CommandOptions, callback: (data: CommandResponse) => void): void
@@ -232,6 +234,7 @@ interface EventValues {
   ChatCommand: [ChatCommand]
   EntityCreate: [Entity]
   EntityDestroyed: [Entity]
+  ChangeSkin: [ChangeSkin]
 }
 
 export interface Player {
@@ -270,6 +273,12 @@ interface PlayerDied {
   player: Player
   killer?: Player | string
   cause: string
+}
+
+interface ChangeSkin {
+  raw: Skin
+  base64: string
+  player: Player
 }
 
 interface ChatCommand {
@@ -323,6 +332,19 @@ export interface Entity {
 export interface WorldManager {
   sendMessage(message: string): void
   kickAll(reason: string): void
+}
+
+export interface RealmManager {
+  downloadRealm(): Promise<string>
+  renameRealm(name: string): Promise<void>
+  closeRealm(): Promise<boolean>
+  openRealm(): Promise<boolean>
+  banUser(XUID: string): Promise<boolean>
+  restartRealm(): Promise<boolean>
+  updatePlayerPermission(player: Player, permissionLevel: "VISITOR" | "MEMBER" | "OPERATOR"): Promise<boolean>
+  getId(): number
+  getName(): string
+  getDayTillExpired(): number
 }
 
 export interface SocketManager {

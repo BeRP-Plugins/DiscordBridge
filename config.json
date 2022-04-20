@@ -1,4 +1,13 @@
 {
-  "token": "Your Token",
-  "channelId": "ChannelId for Messages"
+	"clientId": "",
+	"guildId": "",
+	"channelId": "",
+	"token": "",
+	"realmName": "",
+	"logMessageEvents": true,
+	"AutoConnect": {
+		"attempt": false,
+		"email": "",
+		"realmId": 0
+	}
 }

@@ -1,86 +1,242 @@
-import { PluginApi } from './@interface/pluginApi.i'
+import { PluginApi } from "./@interface/pluginApi.i";
 import {
   Client,
+  Intents,
   MessageEmbed,
   TextChannel,
-} from 'discord.js'
-import fs from 'fs'
-import path from 'path'
-import EventEmitter from 'events'
-import { CommandManager } from './CommandManager'
-import { Config } from './@interface/DiscordBridge.i'
+  Interaction,
+} from "discord.js";
+import { SlashCommandBuilder } from "@discordjs/builders";
 
-class DiscordBridge extends EventEmitter {
-    private api: PluginApi
-    public config: Config
-    private client: Client
-    private main: DiscordBridge
-    private commandManager: CommandManager
-    public handleMessages = true
+import { REST } from '@discordjs/rest';
+import { Routes } from 'discord-api-types/v9';
 
-    constructor(api: PluginApi) {
-      super()
-      this.api = api
-      this.config = JSON.parse(fs.readFileSync(path.resolve(this.api.path + '/config.json'), "utf-8"))
-      this.client = new Client()
-      this.commandManager = new CommandManager(this.api, this)
+const { token, channelId, clientId, guildId, AutoConnect, realmName, logMessageEvents } = require("../config.json");
+
+function getSavedPic(eventXuid){
+    const tempPicMap = {
+        2533274884028261: "https://cdn.discordapp.com/avatars/269249777185718274/a_f7a7df655ec0c612ec4e42094adc1903.png"
     }
-    public onLoaded(): void {
-      this.api.getLogger().info("Loaded!")
-    }
-    public async onEnabled(): Promise<void> {
-      this.api.createInterface({
-        name: "DiscordBridge",
-        interface: fs.readFileSync(path.resolve(this.api.path + '/src' + '/@interface' + '/DiscordBridge.i.ts'), "utf-8"),
-      })
-      this.api.getLogger().info('Enabled!')
-      this.main = await (await this.api.getPluginByInstanceId(this.api.getConfig().name, 1)).plugin as unknown as DiscordBridge
-      this.commandManager.onEnabled()
-      this.api.getEventManager().on("PlayerMessage", (data) => {
-        if (!this.handleMessages) return
-        const c = this.api.getConnection()
-        this.main.sendMessage(`**[**${c.realm.name.replace(/§\S/g, "")}**]** **${data.sender.getName()}:** ${data.message.replace(/§\S/g, "")}`)
-        for (const [, con] of c.getConnectionManager().getConnections()) {
-          if (con.id === c.id) continue
-          const pl = con.getPlugins().get(this.api.getConfig().name)
-          const api = pl.api
-          api.getWorldManager().sendMessage(`§l§8[§r§b${con.realm.name.replace(/§\S/g, "")}§l§8]§r §7${data.sender.getName()}:§r ${data.message.replace(/§\S/g, "")}`)
-        }
-      })
-      if (this.api.getApiId() === 1) return this.createBot()
-    }
-    public onDisabled(): void {
-      this.api.getLogger().info('Disabled!')
-      this.commandManager.onDisabled()
-      this.client.destroy()
-    }
-    public sendMessage(message: string): void {
-      this.client.channels.fetch(this.config.channelId).then((channel: TextChannel) => {
-        channel.send(message)
-      })
-    }
-    public sendEmbed(embed: MessageEmbed): void {
-      this.client.channels.fetch(this.config.channelId).then((channel: TextChannel) => {
-        channel.send({embed})
-      })
-    }
-    private createBot(): void {
-      this.client.login(this.config.token)
-      this.client.on("ready", () => {
-        this.api.getLogger().success(`${this.client.user.tag} is online!`)
-      })
-      this.client.on("message", (data) => {
-        if (data.channel.id != this.config.channelId || data.author.bot || !this.handleMessages || data.content.startsWith(this.getCommandManager().prefix)) return
-        for (const [, c] of this.api.getConnection().getConnectionManager()
-          .getConnections()) {
-          const pl = c.getPlugins().get(this.api.getConfig().name)
-          const api = pl.api
-          api.getWorldManager().sendMessage(`§l§8[§r§9Discord§l§8]§r §7${data.author.tag}:§r ${data.content}`)
-        }
-      })
-    }
-    public getClient(): Client { return this.client }
-    public getCommandManager(): CommandManager { return this.commandManager }
+    if (eventXuid in tempPicMap) {
+	    return tempPicMap[eventXuid]
+	} else {
+	    return "https://i.imgur.com/7ltWLoa.png"
+	}
 }
 
-export = DiscordBridge
+
+class DiscBot {
+    private api: PluginApi
+    private commandMap: Map<string, CallableFunction>
+    private commandArray: SlashCommandBuilder[]
+    private client: Client
+    private ready: boolean = false
+    private messageQueue: { message:string, channel?:string }[] = []
+    private embedQueue: { embed: MessageEmbed[], channel?:string }[] = []
+    private commandQueue: DiscordCommand[] = []
+    constructor(api: PluginApi) {
+        this.api = api;
+        this.client = new Client({
+        intents: [
+          Intents.FLAGS.GUILDS,
+          Intents.FLAGS.GUILD_MESSAGES,
+          Intents.FLAGS.GUILD_MEMBERS,
+          ],
+        });
+        this.commandArray = [];
+        this.commandMap = new Map();
+        }
+	
+    async onLoaded(): Promise<void> {
+        this.api.getLogger().info("Discord-MC Bridge loaded!");
+        if(!AutoConnect.attempt) return
+	    this.api.getLogger().info("Attempting auto-connection with realm...");
+	    try {
+	        this.api.autoConnect(AutoConnect.email, AutoConnect.realmId)
+        }
+	    catch(error) {
+	        this.api.getLogger().error("AutoConnect failed... Attempting reconnect", error)
+			try {
+			    this.api.autoReconnect(AutoConnect.email, AutoConnect.realmId)
+			}
+			catch(anotherError) {
+			    this.api.getLogger().error("AutoReconnect failed. Skipping...", anotherError)
+			}
+        }
+    }
+    async onEnabled(): Promise<void> {
+	this.api.getLogger().info("Discord-MC Bridge enabled! (onEnabled)");
+	this.api.getLogger().info("Discord-MC Bridge connecting to Discord Client...");
+        let client = this.client
+        client.login(token);
+	this.api.getLogger().info("Discord-MC Bridge login complete.");
+        client.on("ready", async () => {
+            this.ready = true;
+            if(this.messageQueue.length > 0) this.messageQueue.forEach(({message, channel}) => this.sendMessage(message, channel));
+            if(this.embedQueue.length > 0) this.embedQueue.forEach(({embed, channel}) => this.sendEmbed(embed, channel));
+            if(this.commandQueue.length > 0) this.commandQueue.forEach((command) => this.registerCommand(command));
+            this.api.getLogger().info("Discord-MC Bridge Client Ready, setting activity...");
+            client.user.setActivity(`over ${realmName}`, { type: "WATCHING" })
+	    this.api.getLogger().info("Discord-MC Bridge Activity set.");
+            this.api.getLogger().info(`Now bridged with Discord as ${client.user.username}`);
+            const StartEmbed = new MessageEmbed()
+                .setColor("#139dbf")
+                .setDescription(`**${realmName}'s chat has been bridged with discord**`)
+            this.sendEmbed([StartEmbed])
+            
+            this.api
+                .getCommandManager()
+                .executeCommand(`tellraw @a {\"rawtext\":[{\"text\":\"§a§l§oDiscord-MC Bridge has been connected.§r\"}]}`);
+                this.registerCommand({name: 'list', description: 'Gets a list of people currently on the realm.', response: async (interaction) => {
+                    if (!interaction.isCommand()) return;
+                    const realmName = this.api.getConnection().realm.name;
+                    let response = `/10 Players Online**:`;
+                    let players = [];
+                    response += `\n*-* ${this.api.getConnection().getXboxProfile().extraData.displayName}`;
+                    for (const [, p] of this.api.getPlayerManager().getPlayerList()) {
+                        players.push(p.getName());
+                        response += `\n*-* ${p.getName()}`;
+                    }
+                    const fancyResponse = new MessageEmbed()
+                        .setColor("#5a0cc0")
+                        .setTitle(`${realmName}`)
+                        .setDescription(`**${players.length + 1}${response}`);
+                    await interaction
+                        .reply({ embeds: [fancyResponse] })
+                        .catch((error) => {
+                            this.api.getLogger().error(error);
+                    });
+                }})
+        });
+        client.on("messageCreate", (message) => {
+            if (message.author.bot)
+                return;
+            if (message.channel.id == channelId) {
+			    if (logMessageEvents) {
+				    this.api.getLogger().success("Received new message event from the Discord client:");
+				    this.api.getLogger().success(`   "${message.content}"`);
+				}
+                this.api
+                    .getCommandManager()
+                    .executeCommand(`tellraw @a {\"rawtext\":[{\"text\":\"§8[§9Discord§8]§f §7${message.author.username}§f: ${message.content}§r\"}]}`);
+            }
+        });
+        this.api.getEventManager().on("PlayerMessage", async (packet) => {
+		    if (logMessageEvents) {
+				this.api.getLogger().success("Received new message event from the Realms client:");
+				this.api.getLogger().success(`   "${packet.message}"`);
+			}
+            this.sendMessage(`[${packet.sender
+                .getConnection()
+                .realm.name.replace(/§[0-9A-FK-OR]/gi, "")
+                .replace("§g", "")}] ${packet.sender.getName()}: ${packet.message}`)//§r
+        });
+        this.api.getEventManager().on("PlayerInitialized", (userJoin) => {
+			let eventXuid = userJoin.getXuid()
+            const Join = new MessageEmbed()
+                .setColor("#00ff00")
+				.setTitle("__Player connected!__")
+                .setDescription(`**${userJoin.getName()}** has joined the realm\nXUID: [${eventXuid}]\nDevice: ${userJoin.getDevice()}`)
+				.setImage(getSavedPic(eventXuid));
+            return this.sendEmbed([Join]);
+        });
+/**		this.api.getEventManager().on("PlayerDied", (userDied) => {
+            const Death = new MessageEmbed()
+                .setColor("#ff0000")
+                .setDescription(`Oof! **${userDied.player}** was just killed by ${userDied.killer}. RIP!`);
+            return this.sendEmbed([Death])
+        });**/
+        this.api.getEventManager().on("PlayerLeft", async (userLeave) => {
+            const Leave = new MessageEmbed()
+                .setColor("#9d3838")
+                .setDescription(`**${userLeave.getName()}** has left the realm.`);
+            return this.sendEmbed([Leave]);
+        });
+        client.on("interactionCreate", async (interaction) => {
+            if (!interaction.isCommand())
+                return;
+            const { commandName } = interaction;
+                if(!this.commandMap.has(commandName)) return;
+                this.commandMap.get(commandName)(interaction)
+        });
+    }
+    public onDisabled() {
+        const fancyStopMSG = new MessageEmbed()
+            .setColor("#139dbf")
+            .setDescription(":octagonal_sign: ***Discord-MC Bridge has been disconnected.***");
+        this.sendEmbed([fancyStopMSG])
+    }
+
+    public sendMessage(message: string, channel?: string): void {
+        if(!this.ready) {
+            this.messageQueue.push({message, channel});
+            return;
+        };
+        if(!channel) channel = channelId;
+        this.client.channels
+        .fetch(channel)
+        .then((channel) => (channel as TextChannel)
+            .send(message))
+        .catch((error) => {
+            this.api.getLogger().error(error);
+        });
+    }
+
+    public sendEmbed(embed: MessageEmbed[], channel?: string): void {
+        if(!this.ready) {
+            this.embedQueue.push({embed, channel});
+            return;
+        };
+        if(!channel) channel = channelId;
+        this.client.channels
+        .fetch(channel)
+        .then(async (channel) => await (channel as TextChannel).send({ embeds: embed }).catch((error) => {
+            this.api.getLogger().error(error);
+        })).catch((error) => {
+            this.api.getLogger().error(error);
+    });
+    }
+
+    public registerCommand(command: DiscordCommand): void {
+        if(!this.ready) {
+            this.commandQueue.push(command)
+            return;
+        };
+        if(this.commandMap.has(command.name)) return this.api.getLogger().error(`${command.name} has already been registered!`)
+        this.commandArray.push(
+            new SlashCommandBuilder()
+        .setName(command.name)
+        .setDescription(command.description)
+        );
+        const commands = this.commandArray.map((command) => command.toJSON());
+        this.api.getLogger().info(`Attempting to register "${command.name}"`)
+            const rest = new REST({ version: "9" }).setToken(token);
+            (async () => {
+                try {
+                    await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
+                        body: commands,
+                    });
+                    this.api
+                        .getLogger()
+                        .success(`Successfully registered "${command.name}".`);
+                    this.commandMap.set(command.name, command.response);
+                }
+                catch (error) {
+                    this.api.getLogger().error(`Error occurred while attempting to register "${command.name}" command`, error);
+                }
+            })();
+    }
+
+
+    public getClient(): Client {
+        return this.client;
+    }
+}
+
+export = DiscBot;
+
+interface DiscordCommand {
+    name: string;
+    description: string;
+    response: (interaction: Interaction) => void;
+}
